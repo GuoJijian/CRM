@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+
+<link th:href="@{/static/jquery/bootstrap_3.3.0/css/bootstrap.min.css}" type="text/css" rel="stylesheet" />
+<link th:href="@{/static/jquery/bootstrap-datetimepicker-master/css/bootstrap-datetimepicker.min.css}" type="text/css" rel="stylesheet" />
+
+<script type="text/javascript" th:src="@{/static/jquery/jquery-1.11.1-min.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/bootstrap_3.3.0/js/bootstrap.min.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/bootstrap-datetimepicker-master/js/bootstrap-datetimepicker.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/bootstrap-datetimepicker-master/locale/bootstrap-datetimepicker.zh-CN.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/vue.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/axios.min.js}"></script>
+
+<script type="text/javascript">
+
+	$(function(){
+		//获取项目的上下文
+		var pathName=document.location.pathname;
+		var contextPath=pathName.substr(0,pathName.substr(1).indexOf("/")+1);
+
+		//创建vue对象
+		var vue=new Vue({
+			el:'#contentDiv',
+			data:{
+				tranList:[],
+				//分页参数
+				page:{
+					pageNum:1,
+					pageSize:10,
+					total:0
+				},
+				owner:'',
+				name:'',
+				customerName:'',
+				stage:'',
+				type:'',
+				source:'',
+				contactsName:'',
+
+				//批量删除参数
+				ids:''
+			},
+			methods:{
+				queryTranForPageByCondition:function () {
+					axios({
+						url:contextPath+'/workbench/transaction/queryTranForPageByCondition',
+						method:'POST',
+						params:{
+							pageNum:this.page.pageNum,
+							pageSize:this.page.pageSize,
+							owner:this.owner.trim(),
+							name:this.name.trim(),
+							customerId:this.customerName.trim(),
+							stage:this.stage,
+							type:this.type,
+							source:this.source,
+							contactsId:this.contactsName.trim()
+						}
+					})
+					.then(function (value) {
+						vue.page=value.data.page;
+						vue.tranList=value.data.tranList;
+
+						//给所有复选框刷新状态
+						$("#transactionThead input[type='checkbox']").prop("checked",false);
+						$("#transactionTbody input[type='checkbox']").prop("checked",false);
+						//为页码栏刷新样式
+						//给首页和上一页按钮刷新样式
+						if(vue.page.hasPreviousPage){
+							//存在上一页
+							$("#navigatePageNumUl li[class='firstPage disabled']").prop("class","firstPage");
+						}else{
+							$("#navigatePageNumUl li[class='firstPage']").prop("class","firstPage disabled");
+						}
+						//末页和下一页按钮刷新样式
+						if(vue.page.hasNextPage){
+							$("#navigatePageNumUl li[class='lastPage disabled']").prop("class","lastPage");
+						}else{
+							$("#navigatePageNumUl li[class='lastPage']").prop("class","lastPage disabled");
+						}
+						//给页码刷新样式
+						$("#navigatePageNumUl li[class='navigatePageNum active']").prop("class","navigatePageNum");
+						$("#li_"+vue.page.pageNum).prop("class","navigatePageNum active");
+					});
+				},
+				queryTranByConditionBtn:function () {
+					vue.page.pageNum=1;
+					vue.queryTranForPageByCondition();
+				},
+				dropTranByIds:function(){
+					axios({
+						url:contextPath+'/workbench/transaction/dropTranByIds',
+						method:'post',
+						data:this.ids
+					})
+					.then(function (value) {
+						if(value.data.code=="1"){
+							vue.queryTranForPageByCondition();
+						}else{
+							//提示错误信息
+							alert(value.data.message);
+						}
+					});
+				},
+				setNavigatepageNumStyle:function () {
+					//给当前页码刷新样式
+					$("#li_"+vue.page.pageNum).prop("class","navigatePageNum active");
+				}
+			},
+			mounted:function () {
+				this.queryTranForPageByCondition();
+				//设置延时器
+				this.timer=setTimeout(this.setNavigatepageNumStyle,1000);
+			}
+		});
+		
+		//给“查询”按钮添加单击事件
+		// $("#queryTranByConditionBtn").click(function () {
+		// 	//重置页码为1,发送异步请求查询
+		// 	vue.page.pageNum=1;
+		// 	vue.queryTranForPageByCondition();
+		// });
+
+		//给“创建”按钮添加单击事件
+		$("#createTranBtn").click(function () {
+			//跳转页面
+			window.location.href=contextPath+'/workbench/transaction/toSave';
+		});
+
+		//给页面大小下拉框添加单击事件
+		$("#pageSizeUl a").click(function () {
+			//获取参数
+			var pageSize=$(this).text();
+			//验证
+			if(pageSize==vue.page.pageSize){
+				return;
+			}
+			//给vue对象赋值，并且发送请求
+			vue.page.pageSize=pageSize;
+			vue.queryTranForPageByCondition();
+		});
+
+		//给页码栏添加单击事件
+		$("#navigatePageNumUl").on("click","a",function () {
+			var pageNum=$(this).text();
+			if(pageNum=='首页'){
+				vue.page.pageNum=1;
+			}else if(pageNum=='上一页'){
+				vue.page.pageNum=vue.page.prePage;
+			}else if(pageNum=='下一页'){
+				vue.page.pageNum=vue.page.nextPage;
+			}else if(pageNum=='末页'){
+				vue.page.pageNum=vue.page.pages;
+			}else if(pageNum==vue.page.pageNum){
+				return;
+			}else{
+				vue.page.pageNum=pageNum;
+			}
+			//刷新交易列表
+			vue.queryTranForPageByCondition();
+		});
+
+		//给复选框添加单击事件
+		$("#transactionThead input[type='checkbox']").click(function () {
+			$("#transactionTbody input[type='checkbox']").prop("checked",this.checked);
+		});
+
+		//给交易列表的单选框添加单击事件
+		$("#transactionTbody").on("click","input[type='checkbox']",function () {
+			var checkbox=$("#transactionTbody input");
+			var checked=$("#transactionTbody input[type='checkbox']:checked");
+			if(checked.size()==checkbox.size()){
+				$("#transactionThead input[type='checkbox']").prop("checked",true);
+			}else{
+				$("#transactionThead input[type='checkbox']").prop("checked",false);
+			}
+		});
+
+		//给删除按钮添加单击事件
+		$("#dropTranBtn").click(function () {
+			//获取参数
+			var checked=$("#transactionTbody input[type='checkbox']:checked");
+			//验证
+			if(checked.size()==0){
+				alert("请至少选中一项交易");
+				return;
+			}
+			if(!window.confirm("确认是否删除！")){
+				return;
+			}
+			//获取选中项的id
+			var ids='';
+			checked.each(function () {
+				ids+='ids='+this.value+'&';
+			});
+			ids=ids.substr(0,ids.lastIndexOf('&'));
+			//给vue对象赋值，删除交易项
+			vue.ids=ids;
+			vue.dropTranByIds();
+		});
+
+		//给“修改”按钮添加单击事件
+		$("#alterTranBtn").click(function () {
+			//获取参数
+			var checked=$("#transactionTbody input[type='checkbox']:checked");
+			var id=checked.val();
+			//验证
+			if(!(checked.size()==1)){
+				alert("请选择一项交易！");
+				return;
+			}
+			//跳转页面
+			window.location.href=contextPath+'/workbench/transaction/toEdit?id='+id;
+		});
+
+		//给交易名称添加单击事件
+		$("#transactionTbody").on("click","a",function () {
+			//获取参数
+			var id=$(this).attr("id");
+			//跳转页面
+			window.location.href=contextPath+'/workbench/transaction/toDetail?id='+id;
+		});
+	});
+	
+</script>
+</head>
+<body>
+
+	
+	
+	<div>
+		<div style="position: relative; left: 10px; top: -10px;">
+			<div class="page-header">
+				<h3>交易列表</h3>
+			</div>
+		</div>
+	</div>
+	
+	<div id="contentDiv" style="position: relative; top: -20px; left: 0px; width: 100%; height: 100%;">
+	
+		<div style="width: 100%; position: absolute;top: 5px; left: 10px;">
+		
+			<div class="btn-toolbar" role="toolbar" style="height: 80px;">
+				<form class="form-inline" role="form" style="position: relative;top: 8%; left: 5px;">
+				  
+				  <div class="form-group">
+				    <div class="input-group">
+				      <div class="input-group-addon">所有者</div>
+				      <input class="form-control" type="text" v-model="owner">
+				    </div>
+				  </div>
+				  
+				  <div class="form-group">
+				    <div class="input-group">
+				      <div class="input-group-addon">名称</div>
+				      <input class="form-control" type="text" v-model="name">
+				    </div>
+				  </div>
+				  
+				  <div class="form-group">
+				    <div class="input-group">
+				      <div class="input-group-addon">客户名称</div>
+				      <input class="form-control" type="text" v-model="customerName">
+				    </div>
+				  </div>
+				  
+				  <br>
+				  
+				  <div class="form-group">
+				    <div class="input-group">
+				      <div class="input-group-addon">阶段</div>
+					  <select class="form-control" v-model="stage">
+					  	<option></option>
+					  	<option th:each="stage : ${stageList}" th:value="${stage.id}" th:text="${stage.value}">资质审查</option>
+<!--					  	<option>需求分析</option>-->
+<!--					  	<option>价值建议</option>-->
+<!--					  	<option>确定决策者</option>-->
+<!--					  	<option>提案/报价</option>-->
+<!--					  	<option>谈判/复审</option>-->
+<!--					  	<option>成交</option>-->
+<!--					  	<option>丢失的线索</option>-->
+<!--					  	<option>因竞争丢失关闭</option>-->
+					  </select>
+				    </div>
+				  </div>
+				  
+				  <div class="form-group">
+				    <div class="input-group">
+				      <div class="input-group-addon">类型</div>
+					  <select class="form-control" v-model="type">
+					  	<option></option>
+					  	<option th:each="tranType : ${tranTypeList}" th:value="${tranType.id}" th:text="${tranType.value}">已有业务</option>
+<!--					  	<option>新业务</option>-->
+					  </select>
+				    </div>
+				  </div>
+				  
+				  <div class="form-group">
+				    <div class="input-group">
+				      <div class="input-group-addon">来源</div>
+				      <select class="form-control" id="create-clueSource" v-model="source">
+						  <option></option>
+						  <option th:each="source : ${sourceList}" th:value="${source.id}" th:text="${source.value}">广告</option>
+<!--						  <option>推销电话</option>-->
+<!--						  <option>员工介绍</option>-->
+<!--						  <option>外部介绍</option>-->
+<!--						  <option>在线商场</option>-->
+<!--						  <option>合作伙伴</option>-->
+<!--						  <option>公开媒介</option>-->
+<!--						  <option>销售邮件</option>-->
+<!--						  <option>合作伙伴研讨会</option>-->
+<!--						  <option>内部研讨会</option>-->
+<!--						  <option>交易会</option>-->
+<!--						  <option>web下载</option>-->
+<!--						  <option>web调研</option>-->
+<!--						  <option>聊天</option>-->
+						</select>
+				    </div>
+				  </div>
+				  
+				  <div class="form-group">
+				    <div class="input-group">
+				      <div class="input-group-addon">联系人名称</div>
+				      <input class="form-control" type="text" v-model="contactsName">
+				    </div>
+				  </div>
+				  
+				  <button id="queryTranByConditionBtn" type="submit" class="btn btn-default" @click="queryTranByConditionBtn">查询</button>
+				  
+				</form>
+			</div>
+			<div class="btn-toolbar" role="toolbar" style="background-color: #F7F7F7; height: 50px; position: relative;top: 10px;">
+				<div class="btn-group" style="position: relative; top: 18%;">
+				  <button id="createTranBtn" type="button" class="btn btn-primary"><span class="glyphicon glyphicon-plus"></span> 创建</button>
+				  <button id="alterTranBtn" type="button" class="btn btn-default"><span class="glyphicon glyphicon-pencil"></span> 修改</button>
+				  <button id="dropTranBtn" type="button" class="btn btn-danger"><span class="glyphicon glyphicon-minus"></span> 删除</button>
+				</div>
+				
+				
+			</div>
+			<div style="position: relative;top: 10px;">
+				<table class="table table-hover">
+					<thead id="transactionThead">
+						<tr style="color: #B3B3B3;">
+							<td><input type="checkbox" /></td>
+							<td>名称</td>
+							<td>客户名称</td>
+							<td>阶段</td>
+							<td>类型</td>
+							<td>所有者</td>
+							<td>来源</td>
+							<td>联系人名称</td>
+						</tr>
+					</thead>
+					<tbody id="transactionTbody">
+						<tr v-for="tran in tranList">
+							<td><input type="checkbox" :value="tran.id"/></td>
+							<td><a :id="tran.id" style="text-decoration: none; cursor: pointer;">{{tran.name}}</a></td>
+							<td>{{tran.customerId}}</td>
+							<td>{{tran.stage}}</td>
+							<td>{{tran.type}}</td>
+							<td>{{tran.owner}}</td>
+							<td>{{tran.source}}</td>
+							<td>{{tran.contactsId}}</td>
+						</tr>
+<!--                        <tr class="active">-->
+<!--                            <td><input type="checkbox" /></td>-->
+<!--                            <td><a style="text-decoration: none; cursor: pointer;" onclick="window.location.href='detail.html';">动力节点-交易01</a></td>-->
+<!--                            <td>动力节点</td>-->
+<!--                            <td>谈判/复审</td>-->
+<!--                            <td>新业务</td>-->
+<!--                            <td>zhangsan</td>-->
+<!--                            <td>广告</td>-->
+<!--                            <td>李四</td>-->
+<!--                        </tr>-->
+					</tbody>
+				</table>
+			</div>
+			
+			<div style="height: 50px; position: relative;top: 20px;">
+				<div>
+					<button type="button" class="btn btn-default" style="cursor: default;">共<b>{{page.total}}</b>条记录</button>
+				</div>
+				<div class="btn-group" style="position: relative;top: -34px; left: 110px;">
+					<button type="button" class="btn btn-default" style="cursor: default;">显示</button>
+					<div class="btn-group">
+						<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
+							{{page.pageSize}}
+							<span class="caret"></span>
+						</button>
+						<ul id="pageSizeUl" class="dropdown-menu" role="menu">
+							<li><a href="#">10</a></li>
+							<li><a href="#">20</a></li>
+							<li><a href="#">30</a></li>
+						</ul>
+					</div>
+					<button type="button" class="btn btn-default" style="cursor: default;">条/页</button>
+				</div>
+				<div style="position: relative;top: -88px; left: 285px;">
+					<nav>
+						<ul id="navigatePageNumUl" class="pagination">
+							<li class="firstPage"><a href="#">首页</a></li>
+							<li class="firstPage"><a href="#">上一页</a></li>
+							<li :id="'li_'+navigatePageNum" class="navigatePageNum" v-for="navigatePageNum in page.navigatepageNums" :navigatePageNum="navigatePageNum"><a href="#">{{navigatePageNum}}</a></li>
+							<li class="lastPage"><a href="#">下一页</a></li>
+							<li class="lastPage"><a href="#">末页</a></li>
+<!--							<li class="disabled"><a href="#">首页</a></li>-->
+<!--							<li class="disabled"><a href="#">上一页</a></li>-->
+<!--							<li class="active"><a href="#">1</a></li>-->
+<!--							<li class="disabled"><a href="#">末页</a></li>-->
+						</ul>
+					</nav>
+				</div>
+			</div>
+			
+		</div>
+		
+	</div>
+</body>
+</html>

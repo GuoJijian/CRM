@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+
+<link th:href="@{/static/jquery/bootstrap_3.3.0/css/bootstrap.min.css}" type="text/css" rel="stylesheet" />
+<link th:href="@{/static/jquery/bootstrap-datetimepicker-master/css/bootstrap-datetimepicker.min.css}" type="text/css" rel="stylesheet" />
+
+<script type="text/javascript" th:src="@{/static/jquery/jquery-1.11.1-min.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/bootstrap_3.3.0/js/bootstrap.min.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/bootstrap-datetimepicker-master/js/bootstrap-datetimepicker.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/bootstrap-datetimepicker-master/locale/bootstrap-datetimepicker.zh-CN.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/vue.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/axios.min.js}"></script>
+
+<script type="text/javascript">
+    window.onload=function () {
+        var pathName=document.location.pathname;
+		var projectName=pathName.substring(0,pathName.substr(1).indexOf('/')+1);
+
+        var vue=new Vue({
+            el:'#by-vue',
+            data:{
+				//通用参数
+				modalActivityOwner:"",
+				modalActivityName:"",
+				modalCost:"",
+				modalDescription:"",
+
+            	//创建参数
+				createStartDate:"",
+				createEndDate:"",
+
+				//查询参数
+				activityName:"",
+				activityOwner:"",
+				startDate:"",
+				endDate:"",
+				pageSize:10,
+
+				//分页参数
+				page:{
+					prePage:0,
+					nextPage:0,
+					total:0,
+					pages:0,
+					hasPreviousPage:false,
+					hasNextPage:true
+				},
+				activityList:[],
+
+				//更新参数
+				editStartDate:"",
+				editEndDate:""
+            },
+            methods:{
+				queryActivityByConditionForPage(pageNum,pageSize){
+					axios({
+						url:projectName+'/workbench/activity/queryActivityByConditionForPage',
+						method:'POST',
+						params:{
+							owner:this.activityOwner.trim(),
+							name:this.activityName.trim(),
+							startDate:this.startDate,
+							endDate:this.endDate,
+							pageNum:pageNum,
+							pageSize:pageSize
+						}
+
+					})
+							.then(function (value) {
+								vue.page=value.data.page;
+								vue.activityList=value.data.activityList;
+								//更新导航栏按钮状态
+								navigatePage();
+								//更新单选框按钮状态
+								$("#checkAll").prop('checked',false);
+								$("#checkTbody input[type='checkbox']").prop('checked',false);
+							})
+							.catch(function (reason) {
+								alert("网络不良，请稍后再试！");
+							})
+
+				},
+                saveActivity:function (event) {
+					//页面数据验证
+					if(vue.modalActivityOwner==""){
+						alert("所有者不能为空！");
+						return;
+					}
+					if(vue.modalActivityName==""){
+						alert("活动名不能为空！");
+						return;
+					}
+					if(vue.createStartDate==""){
+						alert("开始时间不能为空！");
+						return;
+					}
+					if(vue.createEndDate==""){
+						alert("结束时间不能为空！");
+						return;
+					}
+					if(vue.modalCost==""){
+						alert("活动成本不能为空！");
+						return;
+					}
+					if(vue.modalDescription==""){
+						alert("活动描述不能为空！");
+						return;
+					}
+
+                    axios({
+                        url:projectName+'/workbench/activity/saveActivity',
+                        method:'POST',
+                        params:{
+							owner:vue.modalActivityOwner.trim(),
+							name:vue.modalActivityName.trim(),
+							startDate:vue.createStartDate,
+							endDate:vue.createEndDate,
+							cost:vue.modalCost.trim(),
+							description:vue.modalDescription.trim()
+                        }
+                    })
+                        .then(function (value) {
+							if(value.data.code=="1"){
+								//关闭创建活动的模态窗口
+								$("#createActivityModal").modal("hide");
+								//清空vue对象的数据
+								vue.clearVue();
+								vue.queryActivityByConditionForPage(1,10);
+							}else{
+								//提示错误信息
+								alert(value.data.message);
+								$("#createActivityModal").modal("show");
+							}
+                        })
+                        .catch(function (reason) {
+
+                        });
+                },
+				//清除模态窗口的数据
+				clearVue:function () {
+					vue.modalActivityOwner="";
+					vue.modalActivityName="";
+					vue.createStartDate="";
+					vue.createEndDate="";
+					vue.modalCost="";
+					vue.modalDescription="";
+				},
+				//“查询”按钮绑定事件
+				queryByCondition:function(){
+					vue.queryActivityByConditionForPage(1,vue.pageSize);
+				},
+				//导航栏绑定函数
+				//首页
+				firstPage:function () {
+					vue.queryActivityByConditionForPage(1,vue.pageSize);
+				},
+				//上一页
+				previousPage:function () {
+					vue.queryActivityByConditionForPage(vue.page.prePage,vue.pageSize);
+				},
+				//下一页
+				nextPage:function () {
+					vue.queryActivityByConditionForPage(vue.page.nextPage,vue.pageSize);
+				},
+				//尾页
+				lastPage:function () {
+					vue.queryActivityByConditionForPage(vue.page.pages,vue.pageSize);
+				},
+				//跳转固定页面
+				toPage:function (event) {
+					var pageA=event.target;
+					var newPage=pageA.innerText;
+					vue.queryActivityByConditionForPage(newPage,vue.pageSize);
+				},
+				//删除事件
+				deleteActivityBtu:function(){
+                	if($("#checkTbody input[type='checkbox']:checked").size()==0){
+                		alert("请选中至少一项！");
+                		return;
+					}
+                	var ids='';
+                	$("#checkTbody input[type='checkbox']:checked").each(function () {
+						ids+="ids="+this.value+"&";
+					});
+                	ids=ids.substring(0,ids.lastIndexOf("&"));
+                	if(window.confirm("确认删除？")){
+						axios({
+							url:projectName+'/workbench/activity/deleteActivityByIds',
+							method:'post',
+							data:ids
+						})
+						.then(function (data) {
+							if(data.code=="0"){
+								alert(data.message);
+							}else{
+								vue.queryActivityByConditionForPage(1,vue.pageSize);
+							}
+						})
+					}
+				},
+				//“修改”按钮触发事件
+				alterActivityBtu:function () {
+					//判断选中项是否唯一
+					var checked=$("#checkTbody input[type='checkbox']:checked");
+					if(checked.size()==0){
+						alert("请选中一项活动");
+						return;
+					}
+					if(checked.size()>1){
+						alert("请不要多选");
+						return;
+					}
+					var id=checked.val();
+					axios({
+						url:projectName+'/workbench/activity/queryActivityById',
+						method:'post',
+						params:{
+							id:id
+						}
+					})
+					.then(function (value) {
+						//获取数据
+						$("#edit-marketActivityId").val(value.data.id);
+						vue.modalActivityOwner=value.data.owner;
+						vue.modalActivityName=value.data.name;
+						vue.editStartDate=value.data.startDate;
+						vue.editEndDate=value.data.endDate;
+						vue.modalCost=value.data.cost;
+						vue.modalDescription=value.data.description;
+						//为时间输入框赋值
+						$("#edit-startDate").val(vue.editStartDate);
+						$("#edit-endDate").val(vue.editEndDate);
+						//打开模态窗口
+						$("#editActivityModal").modal("show");
+					});
+				},
+				updateActivityBtu:function () {
+					//表单验证
+					if(vue.modalActivityOwner==''){
+						alert("所有人不能为空！");
+						return;
+					}
+					if (vue.modalActivityName==''){
+						alert("活动名不能为空！");
+						return;
+					}
+
+					if(vue.editStartDate==''){
+						alert("活动开始时间不能为空！");
+						return;
+					}
+					if(vue.editEndDate==''){
+						alert("活动结束时间不能为空！");
+						return;
+					}
+					if(vue.editEndDate<vue.editStartDate){
+						alert("活动结束时间不能小于开始时间！");
+						return;
+					}
+
+					if(vue.modalCost==''){
+						alert("活动成本不能为空！");
+						return;
+					}
+					var integer=/^[0-9]*[1-9][0-9]*$/;
+					if(!integer.test(vue.modalCost)){
+						alert("活动成本只能为正整数！");
+						return;
+					}
+
+					if(vue.modalDescription==''){
+						alert("活动描述不能为空！");
+						return;
+					}
+					//表单验证通过，向后台发送异步请求
+					axios({
+						url:projectName+'/workbench/activity/alterActivityById',
+						method:'post',
+						params:{
+							id:$("#edit-marketActivityId").val(),
+							owner:vue.modalActivityOwner,
+							name:vue.modalActivityName,
+							startDate:vue.editStartDate,
+							endDate:vue.editEndDate,
+							cost:vue.modalCost,
+							description:vue.modalDescription
+						}
+					})
+					.then(function (value) {
+						if(value.data.code=="1"){
+							//更新当前页面的数据
+							vue.queryActivityByConditionForPage(vue.page.pageNum,vue.page.pageSize);
+							//隐藏模态窗口
+							$("#editActivityModal").modal("hide");
+						}else{
+							//提示错误信息
+							alert(value.data.message);
+							//模态窗口不关闭
+							$("#editActivityModal").modal("show");
+						}
+					});
+				},
+
+				//点击市场活动名称事件
+				toDetail:function(e){
+                	//收集数据
+					var activityId=e.target.getAttribute("myValue");
+					//跳转页面
+					window.location.href=projectName+'/workbench/activity/toDetail?activityId='+activityId;
+				}
+
+            },
+
+			beforeMount:function(){
+            	//页面渲染后获取数据，只执行一次
+            	// this.$nextTick(function () {
+            	// 	//更新数据
+				// 	vue.queryActivityByConditionForPage(1,10);
+				// })
+				this.queryActivityByConditionForPage(1,10);
+			}
+        });
+		
+        //解决日历显示乱码
+		$.fn.datetimepicker.dates['zh-CN'] = {
+			days: ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"],
+			daysShort: ["周日", "周一", "周二", "周三", "周四", "周五", "周六", "周日"],
+			daysMin:  ["日", "一", "二", "三", "四", "五", "六", "日"],
+			months: ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"],
+			monthsShort: ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"],
+			today: "今天",
+			clear:"清空",
+			suffix: [],
+			meridiem: ["上午", "下午"]
+		};
+        //调用日历工具函数
+		$(".editDate").datetimepicker({
+			language:'zh-CN',//语言
+			format:'yyyy-mm-dd',//日期格式
+			minView:'month',//可选择的最小视图
+			initialDate:new Date(),//初始化时显示的日期
+			autoclose:true,//设置选择完日期后，自动关闭日历
+			todayBtn:true,//设置是否显示“今天”按钮
+			clearBtn:true//设置是否显示“清除”按钮
+		}).on('changeDate',function (event) {
+			//当时间改变时为vue的属性赋值
+			vue.createStartDate=$("#create-startDate").val();
+			vue.createEndDate=$("#create-endDate").val();
+			vue.startDate=$("#start-date").val();
+			vue.endDate=$("#end-date").val();
+			vue.editStartDate=$("#edit-startDate").val();
+			vue.editEndDate=$("#edit-endDate").val();
+		});
+
+		//导航栏函数
+		function navigatePage(){
+			//判断是否存在上一页/首页
+			if(!vue.page.hasPreviousPage){
+				$("#first-page").prop("class","disabled");
+				$("#previous-page").prop("class","disabled");
+			}else{
+				$("#first-page").prop("class","");
+				$("#previous-page").prop("class","");
+			}
+			//判断是否存在下一页/尾页
+			if(!vue.page.hasNextPage){
+				$("#next-page").prop("class","disabled");
+				$("#last-page").prop("class","disabled");
+			}else{
+				$("#next-page").prop("class","");
+				$("#last-page").prop("class","");
+			}
+		}
+
+		//为“创建”按钮注册点击事件
+		$("#createActivityBtu").click(function () {
+			//清空表单
+			$("#createActivityForm").get(0).reset();
+
+			//显示创建活动的模态窗口
+			$("#createActivityModal").modal("show");
+		});
+
+		//页面大小发生改变
+		//给按钮下拉列绑定单击事件
+		$(".page-size-change").click(function (event) {
+			var pageSize=event.target.innerText;
+			vue.pageSize=parseInt(pageSize);
+			$("#page-size").html(pageSize+"\n" +
+					"<span class=\"caret\"></span>");
+			vue.queryActivityByConditionForPage(1,vue.pageSize);
+		});
+
+		//给全选框添加单击事件
+		$("#checkAll").click(function () {
+			//通过父子选择器，选中tbody下的所有类型为checkbox的input
+			$("#checkTbody input[type='checkbox']").prop("checked",this.checked);
+		});
+
+		$("#checkTbody").on("click","input[type='checkbox']",function () {
+			if($("#checkTbody input[type='checkbox']").size()==$("#checkTbody input[type='checkbox']:checked").size()){
+				$("#checkAll").prop("checked",true);
+			}else{
+				$("#checkAll").prop("checked",false);
+			}
+		});
+
+		//给批量下载按钮添加单击事件
+		$("#exportActivityAllBtn").click(function () {
+			window.location.href=projectName+'/workbench/activity/exportActivityDownload';
+		});
+		//给批量下载选择按钮添加单击事件
+		$("#exportActivityXzBtn").click(function () {
+			//前端验证
+			if($("#checkTbody input[type='checkbox']:checked").size()==0){
+				alert("请至少选中一项活动！");
+				return;
+			}
+			//收集参数
+			var ids='';
+			$("#checkTbody input[type='checkbox']:checked").each(function () {
+				ids+='ids='+this.value+'&';
+			});
+			ids=ids.substring(0,ids.lastIndexOf('&'));
+			window.location.href=projectName+'/workbench/activity/optionActivityDownload?'+ids;
+		});
+
+		//给上传按钮添加单击事件
+		$("#uploadActivityBtn").click(function () {
+			//显示导入文件的模态窗口
+			$("#importActivityModal").modal("show");
+		});
+
+		//给导入按钮添加单击事件
+		$("#importActivityBtn").click(function () {
+			//前端验证
+			//验证文件格式
+			var fileName=$("#activityFile").val();
+			var suffix=fileName.substring(fileName.lastIndexOf(".")+1).toUpperCase();
+			if(suffix!='XLS'){
+				alert("只能导入格式为xls的文件！");
+			}
+			//验证文件大小
+			var activityFile=$("#activityFile")[0].files[0];
+			if(activityFile.size>1024*1024*5){
+				alert("文件大小不能超过5MB！");
+			}
+			var formData=new FormData();
+			formData.append("activityFile",activityFile);
+			axios({
+				url:projectName+'/workbench/activity/uploadActivity',
+				method:'post',
+				data:formData
+			})
+			.then(function (value) {
+				if(value.data.code=="1"){
+					//显示成功信息
+					alert(value.data.message);
+					//关闭模态窗口
+					$("#importActivityModal").modal("hide");
+					//刷新市场活动
+					vue.queryActivityByConditionForPage(vue.page.pageNum,vue.page.pageSize);
+				}else{
+					//显示错误信息
+					alert(value.data.message);
+					//开启模态窗口
+					$("#importActivityModal").modal("show");
+				}
+			});
+		});
+    }
+	
+</script>
+</head>
+<body>
+<div id="by-vue">
+	<!-- 创建市场活动的模态窗口 -->
+	<div class="modal fade" id="createActivityModal" role="dialog">
+		<div class="modal-dialog" role="document" style="width: 85%;">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal">
+						<span aria-hidden="true">×</span>
+					</button>
+					<h4 class="modal-title" id="myModalLabel1">创建市场活动</h4>
+				</div>
+				<div class="modal-body">
+				
+					<form class="form-horizontal" role="form" id="createActivityForm">
+					
+						<div class="form-group">
+							<label for="create-marketActivityOwner" class="col-sm-2 control-label">所有者<span style="font-size: 15px; color: red;">*</span></label>
+							<div class="col-sm-10" style="width: 300px;">
+								<select class="form-control" id="create-marketActivityOwner" v-model="modalActivityOwner">
+								  <option th:each="user : ${userList}" th:value="${user.id}" th:text="${user.name}"></option>
+								</select>
+							</div>
+                            <label for="create-marketActivityName" class="col-sm-2 control-label">名称<span style="font-size: 15px; color: red;">*</span></label>
+                            <div class="col-sm-10" style="width: 300px;">
+                                <input type="text" class="form-control" id="create-marketActivityName" v-model="modalActivityName">
+                            </div>
+						</div>
+						
+						<div class="form-group">
+							<label for="create-startDate" class="col-sm-2 control-label">开始日期</label>
+							<div class="col-sm-10" style="width: 300px;">
+								<input type="text" class="form-control editDate" id="create-startDate" readonly>
+							</div>
+							<label for="create-endDate" class="col-sm-2 control-label">结束日期</label>
+							<div class="col-sm-10" style="width: 300px;">
+								<input type="text" class="form-control editDate" id="create-endDate" readonly>
+							</div>
+						</div>
+                        <div class="form-group">
+
+                            <label for="create-cost" class="col-sm-2 control-label">成本</label>
+                            <div class="col-sm-10" style="width: 300px;">
+                                <input type="text" class="form-control" id="create-cost" v-model="modalCost">
+                            </div>
+                        </div>
+						<div class="form-group">
+							<label for="create-describe" class="col-sm-2 control-label">描述</label>
+							<div class="col-sm-10" style="width: 81%;">
+								<textarea class="form-control" rows="3" id="create-describe" v-model="modalDescription"></textarea>
+							</div>
+						</div>
+						
+					</form>
+					
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+					<button type="button" class="btn btn-primary" @click="saveActivity">保存</button>
+				</div>
+			</div>
+		</div>
+	</div>
+	
+	<!-- 修改市场活动的模态窗口 -->
+	<div class="modal fade" id="editActivityModal" role="dialog">
+		<div class="modal-dialog" role="document" style="width: 85%;">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal">
+						<span aria-hidden="true">×</span>
+					</button>
+					<h4 class="modal-title" id="myModalLabel2">修改市场活动</h4>
+				</div>
+				<div class="modal-body">
+				
+					<form class="form-horizontal" role="form">
+						<input type="hidden" id="edit-marketActivityId">
+						<div class="form-group">
+							<label for="edit-marketActivityOwner" class="col-sm-2 control-label">所有者<span style="font-size: 15px; color: red;">*</span></label>
+							<div class="col-sm-10" style="width: 300px;">
+								<select class="form-control" id="edit-marketActivityOwner" v-model="modalActivityOwner">
+								  <option th:each="user : ${userList}" th:value="${user.id}" th:text="${user.name}">zhangsan</option>
+								</select>
+							</div>
+                            <label for="edit-marketActivityName" class="col-sm-2 control-label">名称<span style="font-size: 15px; color: red;">*</span></label>
+                            <div class="col-sm-10" style="width: 300px;">
+                                <input type="text" class="form-control" id="edit-marketActivityName" value="发传单" v-model="modalActivityName">
+                            </div>
+						</div>
+
+						<div class="form-group">
+							<label for="edit-startDate" class="col-sm-2 control-label">开始日期</label>
+							<div class="col-sm-10" style="width: 300px;">
+								<input type="text" class="form-control editDate" id="edit-startDate" value="2020-10-10" readonly>
+							</div>
+							<label for="edit-endDate" class="col-sm-2 control-label">结束日期</label>
+							<div class="col-sm-10" style="width: 300px;">
+								<input type="text" class="form-control editDate" id="edit-endDate" value="2020-10-20" readonly>
+							</div>
+						</div>
+						
+						<div class="form-group">
+							<label for="edit-cost" class="col-sm-2 control-label">成本</label>
+							<div class="col-sm-10" style="width: 300px;">
+								<input type="text" class="form-control" id="edit-cost" value="5,000" v-model="modalCost">
+							</div>
+						</div>
+						
+						<div class="form-group">
+							<label for="edit-describe" class="col-sm-2 control-label">描述</label>
+							<div class="col-sm-10" style="width: 81%;">
+								<textarea class="form-control" rows="3" id="edit-describe" v-model="modalDescription">市场活动Marketing，是指品牌主办或参与的展览会议与公关市场活动，包括自行主办的各类研讨会、客户交流会、演示会、新产品发布会、体验会、答谢会、年会和出席参加并布展或演讲的展览会、研讨会、行业交流会、颁奖典礼等</textarea>
+							</div>
+						</div>
+						
+					</form>
+					
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+					<button type="button" class="btn btn-primary" @click="updateActivityBtu()">更新</button>
+				</div>
+			</div>
+		</div>
+	</div>
+	
+	<!-- 导入市场活动的模态窗口 -->
+    <div class="modal fade" id="importActivityModal" role="dialog">
+        <div class="modal-dialog" role="document" style="width: 85%;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span aria-hidden="true">×</span>
+                    </button>
+                    <h4 class="modal-title" id="myModalLabel">导入市场活动</h4>
+                </div>
+                <div class="modal-body" style="height: 350px;">
+                    <div style="position: relative;top: 20px; left: 50px;">
+                        请选择要上传的文件：<small style="color: gray;">[仅支持.xls]</small>
+                    </div>
+                    <div style="position: relative;top: 40px; left: 50px;">
+                        <input type="file" id="activityFile">
+                    </div>
+                    <div style="position: relative; width: 400px; height: 320px; left: 45% ; top: -40px;" >
+                        <h3>重要提示</h3>
+                        <ul>
+                            <li>操作仅针对Excel，仅支持后缀名为XLS的文件。</li>
+                            <li>给定文件的第一行将视为字段名。</li>
+                            <li>请确认您的文件大小不超过5MB。</li>
+                            <li>日期值以文本形式保存，必须符合yyyy-MM-dd格式。</li>
+                            <li>日期时间以文本形式保存，必须符合yyyy-MM-dd HH:mm:ss的格式。</li>
+                            <li>默认情况下，字符编码是UTF-8 (统一码)，请确保您导入的文件使用的是正确的字符编码方式。</li>
+                            <li>建议您在导入真实数据之前用测试文件测试文件导入功能。</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+                    <button id="importActivityBtn" type="button" class="btn btn-primary">导入</button>
+                </div>
+            </div>
+        </div>
+    </div>
+	
+	
+	<div>
+		<div style="position: relative; left: 10px; top: -10px;">
+			<div class="page-header">
+				<h3>市场活动列表</h3>
+			</div>
+		</div>
+	</div>
+	<div style="position: relative; top: -20px; left: 0px; width: 100%; height: 100%;">
+		<div style="width: 100%; position: absolute;top: 5px; left: 10px;">
+		
+			<div class="btn-toolbar" role="toolbar" style="height: 80px;">
+				<form class="form-inline" role="form" style="position: relative;top: 8%; left: 5px;">
+				  
+				  <div class="form-group">
+				    <div class="input-group">
+				      <div class="input-group-addon">名称</div>
+				      <input class="form-control" type="text" v-model="activityName">
+				    </div>
+				  </div>
+				  
+				  <div class="form-group">
+				    <div class="input-group">
+				      <div class="input-group-addon">所有者</div>
+				      <input class="form-control" type="text" v-model="activityOwner">
+				    </div>
+				  </div>
+
+
+				  <div class="form-group">
+				    <div class="input-group">
+				      <div class="input-group-addon">开始日期</div>
+					  <input class="form-control editDate" type="text" id="start-date" v-model="startDate" readonly/>
+				    </div>
+				  </div>
+				  <div class="form-group">
+				    <div class="input-group">
+				      <div class="input-group-addon">结束日期</div>
+					  <input class="form-control editDate" type="text" id="end-date" v-model="endDate" readonly>
+				    </div>
+				  </div>
+				  
+				  <button type="button" class="btn btn-default" @click="queryByCondition()">查询</button>
+				  
+				</form>
+			</div>
+			<div class="btn-toolbar" role="toolbar" style="background-color: #F7F7F7; height: 50px; position: relative;top: 5px;">
+				<div class="btn-group" style="position: relative; top: 18%;">
+				  <button id="createActivityBtu" type="button" class="btn btn-primary"><span class="glyphicon glyphicon-plus"></span> 创建</button>
+				  <button type="button" class="btn btn-default" @click="alterActivityBtu()"><span class="glyphicon glyphicon-pencil"></span> 修改</button>
+				  <button type="button" class="btn btn-danger" @click="deleteActivityBtu()"><span class="glyphicon glyphicon-minus"></span> 删除</button>
+				</div>
+				<div class="btn-group" style="position: relative; top: 18%;">
+                    <button id="uploadActivityBtn" type="button" class="btn btn-default"><span class="glyphicon glyphicon-import"></span> 上传列表数据（导入）</button>
+                    <button id="exportActivityAllBtn" type="button" class="btn btn-default"><span class="glyphicon glyphicon-export"></span> 下载列表数据（批量导出）</button>
+                    <button id="exportActivityXzBtn" type="button" class="btn btn-default"><span class="glyphicon glyphicon-export"></span> 下载列表数据（选择导出）</button>
+                </div>
+			</div>
+			<div style="position: relative;top: 10px;">
+				<table class="table table-hover">
+					<thead>
+						<tr style="color: #B3B3B3;">
+							<td><input type="checkbox" id="checkAll"/></td>
+							<td>名称</td>
+                            <td>所有者</td>
+							<td>开始日期</td>
+							<td>结束日期</td>
+						</tr>
+					</thead>
+					<tbody id="checkTbody">
+						<tr class="active"  v-for="activity in activityList">
+							<td><input type="checkbox" :value="activity.id"/></td>
+						<td><a style="text-decoration: none; cursor: pointer;" @click="toDetail($event)" :myValue="activity.id">{{activity.name}}</a></td>
+                            <td>{{activity.owner}}</td>
+							<td>{{activity.startDate}}</td>
+							<td>{{activity.endDate}}</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+			
+			<div style="height: 50px; position: relative;top: 30px;">
+				<div>
+					<button type="button" class="btn btn-default" style="cursor: default;">共<b>{{page.total}}</b>条记录</button>
+				</div>
+				<div class="btn-group" style="position: relative;top: -34px; left: 110px;">
+					<button type="button" class="btn btn-default" style="cursor: default;">显示</button>
+					<div class="btn-group">
+						<button id="page-size" type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">
+							{{pageSize}}
+							<span class="caret"></span>
+						</button>
+						<ul class="dropdown-menu" role="menu">
+							<li><a href="#" id="page-size-change-10" class="page-size-change">10</a></li>
+							<li><a href="#" id="page-size-change-20" class="page-size-change">20</a></li>
+							<li><a href="#" id="page-size-change-30" class="page-size-change">30</a></li>
+						</ul>
+					</div>
+					<button type="button" class="btn btn-default" style="cursor: default;">条/页</button>
+				</div>
+				<div style="position: relative;top: -88px; left: 285px;">
+					<nav>
+						<ul class="pagination">
+							<li id="first-page" @click="firstPage()"><a href="#">首页</a></li>
+							<li id="previous-page" @click="previousPage()"><a href="#">上一页</a></li>
+							<li v-for="navigatepageNum in page.navigatepageNums" @click="toPage($event)"><a href="#">{{navigatepageNum}}</a></li>
+							<li id="next-page" @click="nextPage()"><a href="#">下一页</a></li>
+							<li id="last-page" @click="lastPage()"><a href="#">末页</a></li>
+						</ul>
+					</nav>
+				</div>
+			</div>
+			
+		</div>
+		
+	</div>
+</div>
+</body>
+</html>

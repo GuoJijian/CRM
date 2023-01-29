@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+
+<link th:href="@{/static/jquery/bootstrap_3.3.0/css/bootstrap.min.css}" type="text/css" rel="stylesheet" />
+<script type="text/javascript" th:src="@{/static/jquery/jquery-1.11.1-min.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/bootstrap_3.3.0/js/bootstrap.min.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/vue.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/axios.min.js}"></script>
+
+<script type="text/javascript">
+
+	//默认情况下取消和保存按钮是隐藏的
+	var cancelAndSaveBtnDefault = true;
+	
+	$(function(){
+		//获取当前项目的上下文路径
+		var pathName=document.location.pathname;
+		var contextPath=pathName.substr(0,pathName.substr(1).indexOf("/")+1);
+
+		var vue=new Vue({
+			el:'#content',
+			data:{
+				id:"",
+				clueRemarkList:[],
+				activityList:[],
+
+				//线索参数
+				clueFullnameAndAppellation:'',
+				clueCompany:'',
+
+				//备注参数
+				remarkId:'',
+				noteContent:'',
+
+				//关联参数
+				name:'',
+				noBundActivityList:[],
+				activityIdsAndClueId:'',
+				activityId:''
+			},
+			methods:{
+				queryClueBundData:function () {
+					axios({
+						url:contextPath+'/workbench/clue/queryClueBundData',
+						method:'post',
+						params:{
+							clueId:this.id
+						}
+					})
+					.then(function (value) {
+						//给vue对象赋值
+						vue.clueRemarkList=value.data.clueRemarkList;
+						vue.activityList=value.data.activityList;
+					});
+				},
+				saveClueRemark:function () {
+					axios({
+						url:contextPath+'/workbench/clue/saveClueRemark',
+						method:'post',
+						params:{
+							clueId:this.id,
+							noteContent:this.noteContent
+						}
+					})
+					.then(function (value) {
+						if(value.data.code=="1"){
+							//清空输入框
+							$("#remark").val("");
+							//刷新备注列表
+							var htmlStr="";
+							htmlStr+="<div id=\"div_"+value.data.retObject.id+"\" class=\"remarkDiv\" style=\"height: 60px;\">";
+							htmlStr+="<img title=\""+value.data.retObject.createBy+"\" src=\"../../image/user-thumbnail.png\" style=\"width: 30px; height:30px;\">";
+							htmlStr+="<div style=\"position: relative; top: -40px; left: 40px;\" >";
+							htmlStr+="<h5 id=\"h5_"+value.data.retObject.id+"\">"+value.data.retObject.noteContent+"</h5>";
+							htmlStr+="<font color=\"gray\">线索</font> <font color=\"gray\">-</font> <b>"+vue.clueFullnameAndAppellation+"-"+vue.clueCompany+"</b> <small style=\"color: gray;\"> "+value.data.retObject.createDate+" 由"+value.data.retObject.createBy+"创建</small>";
+							htmlStr+="<div style=\"position: relative; left: 500px; top: -30px; height: 30px; width: 100px; display: none;\">";
+							htmlStr+="<a name=\"alterA\" class=\"myHref\" href=\"javascript:void(0);\" remarkid=\""+value.data.retObject.id+"\"><span class=\"glyphicon glyphicon-edit\" style=\"font-size: 20px; color: #E6E6E6;\"></span></a>&nbsp;&nbsp;&nbsp;&nbsp;";
+							htmlStr+="<a name=\"dropA\" class=\"myHref\" href=\"javascript:void(0);\" remarkid=\""+value.data.retObject.id+"\"><span class=\"glyphicon glyphicon-remove\" style=\"font-size: 20px; color: #E6E6E6;\"></span></a>";
+							htmlStr+="</div>";
+							htmlStr+="</div>";
+							htmlStr+="</div>";
+							$("#remarkDiv").before(htmlStr);
+						}else{
+							//提示错误信息
+							alert(value.data.message);
+						}
+					});
+				},
+				dropClueRemarkById:function () {
+					axios({
+						url:contextPath+'/workbench/clue/dropClueRemarkById',
+						method:'post',
+						params:{
+							id:this.remarkId
+						}
+					})
+					.then(function (value) {
+						if(value.data.code=="1"){
+							//更新线索备注列表
+							$("#div_"+vue.remarkId).remove();
+						}else{
+							//提示错误信息
+							alert(value.data.message);
+						}
+					});
+				},
+				alterClueRemarkById:function () {
+					axios({
+						url:contextPath+'/workbench/clue/alterClueRemarkById',
+						method:'post',
+						params:{
+							id:this.remarkId,
+							noteContent:this.noteContent
+						}
+					})
+					.then(function (value) {
+						if(value.data.code=="1"){
+							//关闭模态窗口
+							$("#editRemarkModal").modal("hide");
+							//刷新线索备注列表
+							$("#h5_"+vue.remarkId).text(value.data.retObject.noteContent);
+							$("#div_"+vue.remarkId+" small").text(" "+value.data.retObject.editDate+" 由"+value.data.retObject.editBy+"修改");
+						}else{
+							//提示错误信息
+							alter(value.data.message);
+							//模态窗口不关闭
+							$("#editRemarkModal").modal("show");
+						}
+					});
+				},
+				queryActivityNoBundByName:function () {
+					axios({
+						url:contextPath+'/workbench/clue/queryActivityNoBundByName',
+						method:'post',
+						params:{
+							name:this.name,
+							clueId:this.id
+						}
+					})
+					.then(function (value) {
+						vue.noBundActivityList=value.data;
+					});
+				},
+				createClueActivityRelationByClueIdAndActivityId:function () {
+					axios({
+						url:contextPath+'/workbench/clue/createClueActivityRelationByClueIdAndActivityId',
+						method:'post',
+						data:this.activityIdsAndClueId
+					})
+					.then(function (value) {
+						if(value.data.code=="1"){
+							//刷新关联的市场活动列表
+							vue.activityList=value.data.retObject;
+							//关闭模态窗口
+							$("#bundModal").modal("hide");
+						}else{
+							//提示错误信息
+							alert(value.data.message);
+							//模态窗口不关闭
+							$("#bundModal").modal("show");
+						}
+					});
+				},
+				dropClueActivityRelationByClueIdAndActivityId:function () {
+					axios({
+						url:contextPath+'/workbench/clue/dropClueActivityRelationByClueIdAndActivityId',
+						method:'post',
+						params:{
+							clueId:this.id,
+							activityId:this.activityId
+						}
+					})
+					.then(function (value) {
+						if(value.data.code=="1"){
+							//刷新关联的市场活动列表
+							$("#tr_"+vue.activityId).remove();
+						}else{
+							//提示错误信息
+							alert(value.data.message);
+						}
+					});
+				}
+			},
+			mounted:function () {
+				//获取参数
+				this.id=$("#clueDetail").attr("name");
+				var clueFullName=$("#clueFullNameB").text();
+				var clueCompany=$("#clueCompanyB").text();
+				//调用vue方法，获取线索绑定数据
+				this.clueFullnameAndAppellation=clueFullName;
+				this.clueCompany=clueCompany;
+
+				this.queryClueBundData();
+			}
+		});
+
+		$("#remark").focus(function(){
+			if(cancelAndSaveBtnDefault){
+				//设置remarkDiv的高度为130px
+				$("#remarkDiv").css("height","130px");
+				//显示
+				$("#cancelAndSaveBtn").show("2000");
+				cancelAndSaveBtnDefault = false;
+			}
+		});
+		
+		$("#cancelBtn").click(function(){
+			//显示
+			$("#cancelAndSaveBtn").hide();
+			//设置remarkDiv的高度为130px
+			$("#remarkDiv").css("height","90px");
+			cancelAndSaveBtnDefault = true;
+		});
+		
+		// $(".remarkDiv").mouseover(function(){
+		// 	$(this).children("div").children("div").show();
+		// });
+		//
+		// $(".remarkDiv").mouseout(function(){
+		// 	$(this).children("div").children("div").hide();
+		// });
+		//
+		// $(".myHref").mouseover(function(){
+		// 	$(this).children("span").css("color","red");
+		// });
+		//
+		// $(".myHref").mouseout(function(){
+		// 	$(this).children("span").css("color","#E6E6E6");
+		// });
+
+		$("#clueRemarkAllDiv").on("mouseover",".remarkDiv",function () {
+			$(this).children("div").children("div").show();
+		});
+
+		$("#clueRemarkAllDiv").on("mouseout",".remarkDiv",function(){
+			$(this).children("div").children("div").hide();
+		});
+
+		$("#clueRemarkAllDiv").on("mouseover",".myHref",function(){
+			$(this).children("span").css("color","red");
+		});
+
+		$("#clueRemarkAllDiv").on("mouseout",".myHref",function(){
+			$(this).children("span").css("color","#E6E6E6");
+		});
+
+		$("#saveClueRemarkBtn").click(function () {
+			//获取参数
+			var noteContent=$.trim($("#remark").val());
+			//验证
+			if(noteContent==''){
+				alert("请输入备注内容！");
+				return;
+			}
+			//调用vue方法，发送异步请求
+			vue.noteContent=noteContent;
+			vue.saveClueRemark();
+		});
+
+		//给备注删除按钮添加单击事件
+		$("#clueRemarkAllDiv").on("click","a[name='dropA']",function () {
+			//收集参数
+			var id=$(this).attr("remarkid");
+
+			vue.remarkId=id;
+			vue.dropClueRemarkById();
+		});
+
+		//给备注编辑按钮添加单击事件
+		$("#clueRemarkAllDiv").on("click","a[name='alterA']",function () {
+			//收集参数
+			var id=$(this).attr("remarkid");
+			var noteContent=$("#h5_"+id).text();
+			//给模态窗口赋值
+			$("#remarkId").val(id);
+			$("#noteContent").val(noteContent);
+			//显示模态窗口
+			$("#editRemarkModal").modal("show");
+		});
+
+		//给“更新”按钮添加单击事件
+		$("#updateRemarkBtn").click(function () {
+			//收集参数
+			var id=$("#remarkId").val();
+			var noteContent=$.trim($("#noteContent").val());
+			//表单验证
+			if(noteContent==''){
+				alert("请输入备注内容！");
+				return;
+			}
+			//给vue对象赋值
+			vue.remarkId=id;
+			vue.noteContent=noteContent;
+			//发送异步请求
+			vue.alterClueRemarkById();
+		});
+
+		//给“关联市场活动”添加单击事件
+		$("#bundAcitivtyA").click(function () {
+			//清空搜索框
+			$("#queryActivityNoBundByNameInput").val("");
+			//清空活动列表
+			vue.noBundActivityList=[];
+			//显示关联市场活动的模态窗口
+			$("#bundModal").modal("show");
+		});
+
+		//给搜索框添加键盘弹起事件
+		$("#queryActivityNoBundByNameInput").keyup(function () {
+			//收集参数
+			var content=$.trim($(this).val());
+			//表单验证，当内容为空或未改变时，不需要查询
+			if(content=="" && vue.name==content){
+				return;
+			}
+			//为vue对象赋值
+			vue.name=content;
+			//取消全选复选框的状态
+			$("#noBundActivityThead input").prop("checked",false);
+			//根据活动名称查询未绑定的市场活动
+			vue.queryActivityNoBundByName();
+		});
+
+		//给全选复选框添加单击事件
+		$("#noBundActivityThead input").click(function () {
+			$("#noBundActivityTbody input").prop("checked",this.checked);
+		});
+
+		//给单选复选框添加单击事件
+		$("#noBundActivityTbody").on("click","input",function () {
+			var checkAll=$("#noBundActivityTbody input");
+			var checked=$("#noBundActivityTbody input:checked");
+			if(checkAll.size()==checked.size()){
+				$("#noBundActivityThead input").prop("checked",true);
+			}else{
+				$("#noBundActivityThead input").prop("checked",false);
+			}
+		});
+
+		//给“关联”按钮添加单击事件
+		$("#bundActivityBtn").click(function () {
+			//验证选中数量
+			var checked=$("#noBundActivityTbody input:checked");
+			if(checked.size()==0){
+				alert("请至少选中一项活动！");
+				return;
+			}
+			//获取参数
+			var activityIdsAndClueId='';
+			checked.each(function () {
+				activityIdsAndClueId+="activityIds="+this.value+"&";
+			});
+			activityIdsAndClueId+="clueId="+vue.id;
+			vue.activityIdsAndClueId=activityIdsAndClueId;
+			//调用vue方法，批量添加关联活动
+			vue.createClueActivityRelationByClueIdAndActivityId();
+		});
+
+		//给”解除关联“添加单击事件
+		$("#bundActivityTbody").on("click","a",function () {
+			//验证
+			if(!window.confirm("确认是否解除关联？")){
+				return;
+			}
+			//收集参数
+			var activityId=$(this).attr("activityid");
+			alert(activityId);
+			//为vue对象赋值
+			vue.activityId=activityId;
+			//发送异步请求
+			vue.dropClueActivityRelationByClueIdAndActivityId();
+		});
+
+		//给“转换”按钮添加单击事件
+		$("#convertBtn").click(function () {
+			//获取参数
+			var id=vue.id;
+			//跳转页面
+			window.location.href=contextPath+'/workbench/clue/toConvert?id='+id;
+		});
+	});
+	
+</script>
+
+</head>
+<body>
+<div id="content">
+	<!-- 修改线索备注的模态窗口 -->
+	<div class="modal fade" id="editRemarkModal" role="dialog">
+		<%-- 备注的id --%>
+		<input type="hidden" id="remarkId">
+		<div class="modal-dialog" role="document" style="width: 40%;">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal">
+						<span aria-hidden="true">×</span>
+					</button>
+					<h4 class="modal-title" id="myModalLabel">修改备注</h4>
+				</div>
+				<div class="modal-body">
+					<form class="form-horizontal" role="form">
+						<div class="form-group">
+							<label for="noteContent" class="col-sm-2 control-label">内容</label>
+							<div class="col-sm-10" style="width: 81%;">
+								<textarea class="form-control" rows="3" id="noteContent"></textarea>
+							</div>
+						</div>
+					</form>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+					<button type="button" class="btn btn-primary" id="updateRemarkBtn">更新</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- 关联市场活动的模态窗口 -->
+	<div class="modal fade" id="bundModal" role="dialog">
+		<div class="modal-dialog" role="document" style="width: 80%;">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal">
+						<span aria-hidden="true">×</span>
+					</button>
+					<h4 class="modal-title">关联市场活动</h4>
+				</div>
+				<div class="modal-body">
+					<div class="btn-group" style="position: relative; top: 18%; left: 8px;">
+						<form class="form-inline" role="form">
+						  <div class="form-group has-feedback">
+						    <input id="queryActivityNoBundByNameInput" type="text" class="form-control" style="width: 300px;" placeholder="请输入市场活动名称，支持模糊查询">
+						    <span class="glyphicon glyphicon-search form-control-feedback"></span>
+						  </div>
+						</form>
+					</div>
+					<table id="activityTable" class="table table-hover" style="width: 900px; position: relative;top: 10px;">
+						<thead id="noBundActivityThead">
+							<tr style="color: #B3B3B3;">
+								<td><input type="checkbox"/></td>
+								<td>名称</td>
+								<td>开始日期</td>
+								<td>结束日期</td>
+								<td>所有者</td>
+								<td></td>
+							</tr>
+						</thead>
+						<tbody id="noBundActivityTbody">
+							<tr v-for="activity in noBundActivityList">
+								<td><input type="checkbox" :value="activity.id"/></td>
+								<td>{{activity.name}}</td>
+								<td>{{activity.startDate}}</td>
+								<td>{{activity.endDate}}</td>
+								<td>{{activity.owner}}</td>
+							</tr>
+<!--							<tr>-->
+<!--								<td><input type="checkbox"/></td>-->
+<!--								<td>发传单</td>-->
+<!--								<td>2020-10-10</td>-->
+<!--								<td>2020-10-20</td>-->
+<!--								<td>zhangsan</td>-->
+<!--							</tr>-->
+						</tbody>
+					</table>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+					<button id="bundActivityBtn" type="button" class="btn btn-primary">关联</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+
+	<!-- 返回按钮 -->
+	<div style="position: relative; top: 35px; left: 10px;">
+		<a href="javascript:void(0);" onclick="window.history.back();"><span class="glyphicon glyphicon-arrow-left" style="font-size: 20px; color: #DDDDDD"></span></a>
+	</div>
+	
+	<!-- 大标题 -->
+	<div style="position: relative; left: 40px; top: -30px;">
+		<div class="page-header">
+			<h3><span th:text="${clue.fullname}+${clue.appellation}">李四先生</span> <small th:text="${clue.company}">动力节点</small></h3>
+		</div>
+		<div style="position: relative; height: 50px; width: 500px;  top: -72px; left: 700px;">
+			<button id="convertBtn" type="button" class="btn btn-default"><span class="glyphicon glyphicon-retweet"></span> 转换</button>
+			
+		</div>
+	</div>
+	
+	<br/>
+	<br/>
+	<br/>
+
+	<!-- 详细信息 -->
+	<div style="position: relative; top: -70px;" id="clueDetail" th:name="${clue.id}">
+		<div style="position: relative; left: 40px; height: 30px;">
+			<div style="width: 300px; color: gray;">名称</div>
+			<div style="width: 300px;position: relative; left: 200px; top: -20px;"><b id="clueFullNameB" th:text="${clue.fullname}+${clue.appellation}">李四先生</b></div>
+			<div style="width: 300px;position: relative; left: 450px; top: -40px; color: gray;">所有者</div>
+			<div style="width: 300px;position: relative; left: 650px; top: -60px;"><b th:text="${clue.owner}">zhangsan</b></div>
+			<div style="height: 1px; width: 400px; background: #D5D5D5; position: relative; top: -60px;"></div>
+			<div style="height: 1px; width: 400px; background: #D5D5D5; position: relative; top: -60px; left: 450px;"></div>
+		</div>
+		<div style="position: relative; left: 40px; height: 30px; top: 10px;">
+			<div style="width: 300px; color: gray;">公司</div>
+			<div style="width: 300px;position: relative; left: 200px; top: -20px;"><b id="clueCompanyB" th:text="${clue.company}">动力节点</b></div>
+			<div style="width: 300px;position: relative; left: 450px; top: -40px; color: gray;">职位</div>
+			<div style="width: 300px;position: relative; left: 650px; top: -60px;"><b th:text="${clue.job}">CTO</b></div>
+			<div style="height: 1px; width: 400px; background: #D5D5D5; position: relative; top: -60px;"></div>
+			<div style="height: 1px; width: 400px; background: #D5D5D5; position: relative; top: -60px; left: 450px;"></div>
+		</div>
+		<div style="position: relative; left: 40px; height: 30px; top: 20px;">
+			<div style="width: 300px; color: gray;">邮箱</div>
+			<div style="width: 300px;position: relative; left: 200px; top: -20px;"><b th:text="${clue.email}">lisi@bjpowernode.com</b></div>
+			<div style="width: 300px;position: relative; left: 450px; top: -40px; color: gray;">公司座机</div>
+			<div style="width: 300px;position: relative; left: 650px; top: -60px;"><b th:text="${clue.phone}">010-84846003</b></div>
+			<div style="height: 1px; width: 400px; background: #D5D5D5; position: relative; top: -60px;"></div>
+			<div style="height: 1px; width: 400px; background: #D5D5D5; position: relative; top: -60px; left: 450px;"></div>
+		</div>
+		<div style="position: relative; left: 40px; height: 30px; top: 30px;">
+			<div style="width: 300px; color: gray;">公司网站</div>
+			<div style="width: 300px;position: relative; left: 200px; top: -20px;"><b th:text="${clue.website}">http://www.bjpowernode.com</b></div>
+			<div style="width: 300px;position: relative; left: 450px; top: -40px; color: gray;">手机</div>
+			<div style="width: 300px;position: relative; left: 650px; top: -60px;"><b th:text="${clue.mphone}">12345678901</b></div>
+			<div style="height: 1px; width: 400px; background: #D5D5D5; position: relative; top: -60px;"></div>
+			<div style="height: 1px; width: 400px; background: #D5D5D5; position: relative; top: -60px; left: 450px;"></div>
+		</div>
+		<div style="position: relative; left: 40px; height: 30px; top: 40px;">
+			<div style="width: 300px; color: gray;">线索状态</div>
+			<div style="width: 300px;position: relative; left: 200px; top: -20px;"><b th:text="${clue.state}">已联系</b></div>
+			<div style="width: 300px;position: relative; left: 450px; top: -40px; color: gray;">线索来源</div>
+			<div style="width: 300px;position: relative; left: 650px; top: -60px;"><b th:text="${clue.source}">广告</b></div>
+			<div style="height: 1px; width: 400px; background: #D5D5D5; position: relative; top: -60px;"></div>
+			<div style="height: 1px; width: 400px; background: #D5D5D5; position: relative; top: -60px; left: 450px;"></div>
+		</div>
+		<div style="position: relative; left: 40px; height: 30px; top: 50px;">
+			<div style="width: 300px; color: gray;">创建者</div>
+			<div style="width: 500px;position: relative; left: 200px; top: -20px;"><b th:text="${clue.createBy}">zhangsan&nbsp;&nbsp;</b><small style="font-size: 10px; color: gray;" th:text="${clue.createDate}">2017-01-18 10:10:10</small></div>
+			<div style="height: 1px; width: 550px; background: #D5D5D5; position: relative; top: -20px;"></div>
+		</div>
+		<div style="position: relative; left: 40px; height: 30px; top: 60px;">
+			<div style="width: 300px; color: gray;">修改者</div>
+			<div style="width: 500px;position: relative; left: 200px; top: -20px;"><b th:text="${clue.editBy}">zhangsan&nbsp;&nbsp;</b><small style="font-size: 10px; color: gray;" th:text="${clue.editDate}">2017-01-19 10:10:10</small></div>
+			<div style="height: 1px; width: 550px; background: #D5D5D5; position: relative; top: -20px;"></div>
+		</div>
+		<div style="position: relative; left: 40px; height: 30px; top: 70px;">
+			<div style="width: 300px; color: gray;">描述</div>
+			<div style="width: 630px;position: relative; left: 200px; top: -20px;">
+				<b th:text="${clue.description}">
+					这是一条线索的描述信息
+				</b>
+			</div>
+			<div style="height: 1px; width: 850px; background: #D5D5D5; position: relative; top: -20px;"></div>
+		</div>
+		<div style="position: relative; left: 40px; height: 30px; top: 80px;">
+			<div style="width: 300px; color: gray;">联系纪要</div>
+			<div style="width: 630px;position: relative; left: 200px; top: -20px;">
+				<b th:text="${clue.contactSummary}">
+					这条线索即将被转换
+				</b>
+			</div>
+			<div style="height: 1px; width: 850px; background: #D5D5D5; position: relative; top: -20px;"></div>
+		</div>
+		<div style="position: relative; left: 40px; height: 30px; top: 90px;">
+			<div style="width: 300px; color: gray;">下次联系时间</div>
+			<div style="width: 300px;position: relative; left: 200px; top: -20px;"><b th:text="${clue.nextContactDate}">2017-05-01</b></div>
+			<div style="height: 1px; width: 400px; background: #D5D5D5; position: relative; top: -20px; "></div>
+		</div>
+        <div style="position: relative; left: 40px; height: 30px; top: 100px;">
+            <div style="width: 300px; color: gray;">详细地址</div>
+            <div style="width: 630px;position: relative; left: 200px; top: -20px;">
+                <b th:text="${clue.address}">
+                    北京大兴大族企业湾
+                </b>
+            </div>
+            <div style="height: 1px; width: 850px; background: #D5D5D5; position: relative; top: -20px;"></div>
+        </div>
+	</div>
+	
+	<!-- 备注 -->
+	<div id="clueRemarkAllDiv" style="position: relative; top: 40px; left: 40px;">
+		<div class="page-header">
+			<h4>备注</h4>
+		</div>
+		
+		<!-- 备注1 -->
+		<div :id="'div_'+clueRemark.id" class="remarkDiv" style="height: 60px;" v-for="clueRemark in clueRemarkList">
+			<img :title="clueRemark.createBy" src="../../image/user-thumbnail.png" style="width: 30px; height:30px;">
+			<div style="position: relative; top: -40px; left: 40px;" >
+				<h5 :id="'h5_'+clueRemark.id">{{clueRemark.noteContent}}</h5>
+				<font color="gray">线索</font> <font color="gray">-</font> <b th:text="${clue.fullname}+${clue.appellation}+'-'+${clue.company}">李四先生-动力节点</b> <small style="color: gray;" v-text="clueRemark.editFlag==0?clueRemark.createDate+' 由'+clueRemark.createBy+'创建':clueRemark.editDate+' 由'+clueRemark.editBy+'修改'"> 2017-01-22 10:10:10 由zhangsan</small>
+				<div style="position: relative; left: 500px; top: -30px; height: 30px; width: 100px; display: none;">
+					<a name="alterA" class="myHref" href="javascript:void(0);" :remarkid="clueRemark.id"><span class="glyphicon glyphicon-edit" style="font-size: 20px; color: #E6E6E6;"></span></a>
+					&nbsp;&nbsp;&nbsp;&nbsp;
+					<a name="dropA" class="myHref" href="javascript:void(0);" :remarkid="clueRemark.id"><span class="glyphicon glyphicon-remove" style="font-size: 20px; color: #E6E6E6;"></span></a>
+				</div>
+			</div>
+		</div>
+		
+		<!-- 备注2 -->
+<!--		<div class="remarkDiv" style="height: 60px;">-->
+<!--			<img title="zhangsan" src="../../image/user-thumbnail.png" style="width: 30px; height:30px;">-->
+<!--			<div style="position: relative; top: -40px; left: 40px;" >-->
+<!--				<h5>呵呵！</h5>-->
+<!--				<font color="gray">线索</font> <font color="gray">-</font> <b>李四先生-动力节点</b> <small style="color: gray;"> 2017-01-22 10:20:10 由zhangsan</small>-->
+<!--				<div style="position: relative; left: 500px; top: -30px; height: 30px; width: 100px; display: none;">-->
+<!--					<a class="myHref" href="javascript:void(0);"><span class="glyphicon glyphicon-edit" style="font-size: 20px; color: #E6E6E6;"></span></a>-->
+<!--					&nbsp;&nbsp;&nbsp;&nbsp;-->
+<!--					<a class="myHref" href="javascript:void(0);"><span class="glyphicon glyphicon-remove" style="font-size: 20px; color: #E6E6E6;"></span></a>-->
+<!--				</div>-->
+<!--			</div>-->
+<!--		</div>-->
+		
+		<div id="remarkDiv" style="background-color: #E6E6E6; width: 870px; height: 90px;">
+			<form role="form" style="position: relative;top: 10px; left: 10px;">
+				<textarea id="remark" class="form-control" style="width: 850px; resize : none;" rows="2"  placeholder="添加备注..."></textarea>
+				<p id="cancelAndSaveBtn" style="position: relative;left: 737px; top: 10px; display: none;">
+					<button id="cancelBtn" type="button" class="btn btn-default">取消</button>
+					<button id="saveClueRemarkBtn" type="button" class="btn btn-primary">保存</button>
+				</p>
+			</form>
+		</div>
+	</div>
+	
+	<!-- 市场活动 -->
+	<div>
+		<div style="position: relative; top: 60px; left: 40px;">
+			<div class="page-header">
+				<h4>市场活动</h4>
+			</div>
+			<div style="position: relative;top: 0px;">
+				<table class="table table-hover" style="width: 900px;">
+					<thead>
+						<tr style="color: #B3B3B3;">
+							<td>名称</td>
+							<td>开始日期</td>
+							<td>结束日期</td>
+							<td>所有者</td>
+							<td></td>
+						</tr>
+					</thead>
+					<tbody id="bundActivityTbody">
+						<tr :id="'tr_'+activity.id" v-for="activity in activityList">
+							<td>{{activity.name}}</td>
+							<td>{{activity.startDate}}</td>
+							<td>{{activity.endDate}}</td>
+							<td>{{activity.owner}}</td>
+							<td><a :activityid="activity.id" href="javascript:void(0);"  style="text-decoration: none;"><span class="glyphicon glyphicon-remove"></span>解除关联</a></td>
+						</tr>
+<!--						<tr>-->
+<!--							<td>发传单</td>-->
+<!--							<td>2020-10-10</td>-->
+<!--							<td>2020-10-20</td>-->
+<!--							<td>zhangsan</td>-->
+<!--							<td><a href="javascript:void(0);"  style="text-decoration: none;"><span class="glyphicon glyphicon-remove"></span>解除关联</a></td>-->
+<!--						</tr>-->
+					</tbody>
+				</table>
+			</div>
+			
+			<div>
+				<a id="bundAcitivtyA" href="javascript:void(0);"style="text-decoration: none;"><span class="glyphicon glyphicon-plus"></span>关联市场活动</a>
+			</div>
+		</div>
+	</div>
+	
+	
+	<div style="height: 200px;"></div>
+</div>
+</body>
+</html>

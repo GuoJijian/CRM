@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <script type="text/javascript" th:src="@{/static/jquery/jquery-1.11.1-min.js}"></script>
+    <script type="text/javascript" th:src="@{/static/jquery/echars/echarts.min.js}"></script>
+    <script type="text/javascript" th:src="@{/static/jquery/vue.js}"></script>
+    <script type="text/javascript" th:src="@{/static/jquery/axios.min.js}"></script>
+    <script type="text/javascript">
+        //入口函数
+        $(function () {
+            //获取当前项目的上下文
+            var pathName=document.location.pathname;
+            var contextPath=pathName.substr(0,pathName.substr(1).indexOf("/")+1);
+            //初始化echarts实例
+            var myChart=echarts.init(document.getElementById("main"));
+            axios({
+                url:contextPath+'/workbench/chart/transaction/queryTranCountGroupByStage',
+                method:'post'
+            })
+            .then(function (value) {
+                //绘制图表
+                myChart.setOption({
+                    title:{
+                        text:'各阶段的交易数量统计图'
+                    },
+                    tooltip:{
+                        formatter:'数据量：{c}'
+                    },
+                    legend:{
+                        left:'right',
+                        data:value.data.stageName
+                    },
+                    series:[{
+                        name:'交易量',
+                        type:'funnel',
+                        left:'10%',
+                        width:'80%',
+                        data:value.data.funnelVNList
+                    }]
+                });
+            });
+
+        })
+    </script>
+</head>
+<body>
+    <div id="main" style="width:780px;height:520px;"></div>
+</body>
+</html>

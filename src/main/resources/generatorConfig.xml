@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE generatorConfiguration
+        PUBLIC "-//mybatis.org//DTD MyBatis Generator Configuration 1.0//EN"
+        "http://mybatis.org/dtd/mybatis-generator-config_1_0.dtd">
+<generatorConfiguration>
+    <!--
+        targetRuntime：执行生成的逆向工程的版本
+            Mybatis3：生成带条件的CRUD（奢侈尊享版）
+            Mybatis3Simple：生成简单的CRUD（清新简洁版）
+    -->
+    <context id="DB2Tables" targetRuntime="MyBatis3Simple">
+        <jdbcConnection
+                driverClass="com.mysql.jdbc.Driver"
+                connectionURL="jdbc:mysql://localhost:3306/crm"
+                userId="root"
+                password="123456">
+        </jdbcConnection>
+
+        <!--JavaBean的生成策略-->
+        <javaModelGenerator targetPackage="com.guojijian.crm.workbench.pojo" targetProject=".\src\main\java">
+            <property name="enableSubPackages" value="true"></property>
+            <property name="trimStrings" value="true"></property>
+        </javaModelGenerator>
+
+        <!--SQL映射文件的生成策略-->
+        <sqlMapGenerator targetPackage="com.guojijian.crm.workbench.mapper" targetProject=".\src\main\resources">
+            <property name="enableSubPackages" value="true"></property>
+        </sqlMapGenerator>
+
+        <!--Mapper接口的生成策略-->
+        <javaClientGenerator type="XMLMAPPER"
+                             targetPackage="com.guojijian.crm.workbench.mapper"
+                             targetProject=".\src\main\java">
+            <property name="enableSubPackages" value="true"></property>
+        </javaClientGenerator>
+        <!--逆向分析的表-->
+        <!--tableName设置为*号，可以对应所有表，此时不写domainObjectName-->
+        <!--domainObjectName属性指定生成出来的实体类的类名-->
+
+        <!--已生成-->
+<!--        <table tableName="tbl_user" domainObjectName="User"></table>-->
+<!--        <table tableName="tbl_activity" domainObjectName="Activity"></table>-->
+<!--        <table tableName="tbl_activity_remark" domainObjectName="ActivityRemark"></table>-->
+<!--        <table tableName="tbl_clue" domainObjectName="Clue"></table>-->
+<!--        <table tableName="tbl_dic_value" domainObjectName="DicValue"></table>-->
+<!--        <table tableName="tbl_clue_remark" domainObjectName="ClueRemark"></table>-->
+<!--        <table tableName="tbl_clue_activity_relation" domainObjectName="ClueActivityRelation"></table>-->
+<!--        <table tableName="tbl_customer" domainObjectName="Customer"></table>-->
+<!--        <table tableName="tbl_customer_remark" domainObjectName="CustomerRemark"></table>-->
+<!--        <table tableName="tbl_contacts" domainObjectName="Contacts"></table>-->
+<!--        <table tableName="tbl_contacts_remark" domainObjectName="ContactsRemark"></table>-->
+<!--        <table tableName="tbl_contacts_activity_relation" domainObjectName="ContactsActivityRelation"></table>-->
+<!--        <table tableName="tbl_tran" domainObjectName="Transaction"></table>-->
+<!--        <table tableName="tbl_tran_remark" domainObjectName="TransactionRemark"></table>-->
+        <table tableName="tbl_tran_history" domainObjectName="TransactionHistory"></table>
+
+        <!--未生成-->
+
+    </context>
+</generatorConfiguration>

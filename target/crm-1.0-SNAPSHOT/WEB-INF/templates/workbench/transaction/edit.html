@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+
+<link th:href="@{/static/jquery/bootstrap_3.3.0/css/bootstrap.min.css}" type="text/css" rel="stylesheet" />
+<link th:href="@{/static/jquery/bootstrap-datetimepicker-master/css/bootstrap-datetimepicker.min.css}" type="text/css" rel="stylesheet" />
+
+<script type="text/javascript" th:src="@{/static/jquery/jquery-1.11.1-min.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/bootstrap_3.3.0/js/bootstrap.min.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/bootstrap-datetimepicker-master/js/bootstrap-datetimepicker.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/bootstrap-datetimepicker-master/locale/bootstrap-datetimepicker.zh-CN.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/bs_typeahead/bootstrap3-typeahead.min.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/vue.js}"></script>
+<script type="text/javascript" th:src="@{/static/jquery/axios.min.js}"></script>
+<script type="text/javascript">
+	//入口函数
+	$(function () {
+		//获取当前项目的上下文路径
+		var pathName=document.location.pathname;
+		var contextPath=pathName.substr(0,pathName.substr(1).indexOf("/")+1);
+
+		//创建一个vue对象
+		var vue=new Vue({
+			el:'#content',
+			data:{
+				id:'',
+				transaction:{},
+				possible:'',
+
+				//edit参数
+				activityName:'',
+				contactsName:'',
+
+				//配置可能性参数
+				stageValue:'',
+
+				//模糊搜索参数
+				searchActivityName:'',
+				searchContactsName:'',
+				activityList:[],
+				contactsList:[]
+			},
+			methods:{
+				queryEditInfo:function () {
+					axios({
+						url:contextPath+'/workbench/transaction/queryEditInfo',
+						method:'post',
+						params:{
+							id:this.id
+						}
+					})
+					.then(function (value) {
+						//给vue对象赋值
+						vue.transaction=value.data.transaction;
+						vue.possible=value.data.possible;
+						vue.activityName=value.data.activityName;
+						vue.contactsName=value.data.contactsName;
+						//给特殊表单元素赋值,客户名称、市场活动源、联系人名称
+						$("#create-customerName").val(vue.transaction.customerId);
+						$("#create-activitySource").attr("activityId",vue.transaction.activityId);
+						$("#create-contactsName").attr("contactsId",vue.transaction.contactsId);
+					});
+				},
+				queryPossibilityByStage:function () {
+					axios({
+						url:contextPath+'/workbench/transaction/queryPossibilityByStage',
+						method:'post',
+						params:{
+							stage:this.stageValue
+						}
+					})
+					.then(function (value) {
+						vue.possible=value.data+'%';
+					});
+				},
+				queryActivityForPartInfoByName:function () {
+					axios({
+						url:contextPath+'/workbench/transaction/queryActivityForPartInfoByName',
+						method:'post',
+						params:{
+							name:this.searchActivityName
+						}
+					})
+					.then(function (value) {
+						vue.activityList=value.data
+					});
+				},
+				queryContactsForPartInfoByName:function () {
+					axios({
+						url:contextPath+'/workbench/transaction/queryContactsForPartInfoByName',
+						method:'post',
+						params:{
+							fullname:this.searchContactsName
+						}
+					})
+					.then(function (value) {
+						vue.contactsList=value.data;
+					});
+				},
+				alterTran:function () {
+					axios({
+						url:contextPath+'/workbench/transaction/alterTran',
+						method:'post',
+						params:{
+							id:this.transaction.id,
+							owner:this.transaction.owner,
+							money:this.transaction.money,
+							name:this.transaction.name,
+							expectedDate:this.transaction.expectedDate,
+							customerId:this.transaction.customerId,
+							stage:this.transaction.stage,
+							type:this.transaction.type,
+							source:this.transaction.source,
+							activityId:this.transaction.activityId,
+							contactsId:this.transaction.contactsId,
+							createBy:this.transaction.createBy,
+							createDate:this.transaction.createDate,
+							description:this.transaction.description,
+							contactSummary:this.transaction.contactSummary,
+							nextContactDate:this.transaction.nextContactDate,
+						}
+					})
+					.then(function (value) {
+						if(value.data.code=="1"){
+							window.location.href=contextPath+'/workbench/transaction/toIndex';
+						}else{
+							//提示错误信息
+							alert(value.data.message);
+						}
+					});
+				}
+			},
+			mounted:function () {
+				//获取交易id
+				this.id=$("#transactionId").val();
+				//查询编辑信息
+				this.queryEditInfo();
+			}
+		});
+
+		//调用日历工具函数
+		$(".editDate").datetimepicker({
+			language:'zh-CN',//语言
+			format:'yyyy-mm-dd',//日期格式
+			minView:'month',//可选择的最小视图
+			initialDate:new Date(),//初始化时显示的日期
+			autoclose:true,//设置选择完日期后，自动关闭日历
+			todayBtn:true,//设置是否显示“今天”按钮
+			clearBtn:true//设置是否显示“清除”按钮
+		}).on('changeDate',function (event) {
+			//当时间改变时为vue的属性赋值
+			vue.transaction.expectedDate=$("#create-expectedDate").val();
+			vue.transaction.nextContactDate=$("#create-nextContactDate").val();
+		});
+
+		//给客户名称框应用自动补全插件
+		$("#create-customerName").typeahead({
+			source:function (query,process) {
+				axios({
+					url:contextPath+'/workbench/transaction/queryCustomerNameByStr',
+					mothed:'post',
+					params:{
+						name:query
+					}
+				})
+				.then(function (value) {
+					process(value.data);
+				});
+			}
+		});
+
+		//给阶段下拉框添加单击事件
+		$("#create-stage").on("click","option",function () {
+			//获取参数
+			var stage=$(this).text();
+			//验证
+			if(stage==''){
+				vue.possible='';
+				return;
+			}
+			//为vue对象赋值，查询配置的可能性
+			vue.stageValue=stage;
+			vue.queryPossibilityByStage();
+		});
+
+		//给市场活动源搜索标签添加单击事件
+		$("#searchActivityA").click(function () {
+			//清空搜索市场活动源的模态窗口
+			$("#searchActivityNameInput").val("");
+			vue.activityList=[];
+			//显示搜索市场活动源的模态窗口
+			$("#findMarketActivity").modal("show");
+		});
+
+		//给市场活动名称输入框添加键盘弹起事件
+		$("#searchActivityNameInput").keyup(function () {
+			//获取参数
+			var activityName=this.value;
+			//表单验证
+			if(activityName=='' || activityName==vue.searchActivityName){
+				return;
+			}
+			//模糊查询市场活动
+			vue.queryActivityForPartInfoByName();
+		});
+
+		//给市场活动列表的单选框添加单击事件
+		$("#activityTbody").on("click","input[type='radio']",function () {
+			//收集参数
+			var activityId=$(this).attr("id");
+			var activityName=$(this).attr("activityName");
+			//给vue对象赋值，为市场活动源名称框添加属性
+			vue.activityName=activityName;
+			$("#create-activitySource").attr("activityId",activityId);
+			//关闭模态窗口
+			$("#findMarketActivity").modal("hide");
+		});
+
+		//给搜索联系人名称标签添加单击事件
+		$("#searchContactsA").click(function () {
+			//初始化查找联系人模态窗口
+			$("#searchContactsNameInput").val("");
+			vue.contactsList=[];
+			//显示查找联系人模态窗口
+			$("#findContacts").modal("show");
+		});
+
+		//给联系人名称输入框添加键盘弹起事件
+		$("#searchContactsNameInput").keyup(function () {
+			//收集参数
+			var contactsName=this.value;
+			//表单验证
+			if(contactsName=='' || contactsName==vue.searchContactsName){
+				return;
+			}
+			//模糊查询联系人
+			vue.queryContactsForPartInfoByName();
+		});
+
+		//给联系人列表的单选框添加单击事件
+		$("#contactsTbody").on("click","input[type='radio']",function () {
+			//收集参数
+			var contactsId=$(this).attr("id");
+			var contactsName=$(this).attr("contactsName");
+			//给vue对象赋值，给联系人名称框创建新属性
+			vue.contactsName=contactsName;
+			$("#create-contactsName").attr("contactsId",contactsId);
+			//关闭模态窗口
+			$("#findContacts").modal("hide");
+		});
+
+		//给“保存”按钮添加单击事件
+		$("#saveTranBtn").click(function () {
+			//获取参数
+			var customerName=$("#create-customerName").val();
+			//表单验证
+			if(vue.transaction.owner==''){
+				alert("所有人不可为空！");
+				return;
+			}
+			if(vue.transaction.money==''){
+				alert("交易金额不可为空！")
+				return;
+			}
+
+			var moneyTest=/^[1-9][0-9]*$/;
+			if(!moneyTest.test(vue.transaction.money)){
+				alert("交易金额非法，请输入非负整数！");
+				return;
+			}
+			if(vue.transaction.name==''){
+				alert("交易名称不可为空！");
+				return;
+			}
+			if(vue.transaction.expectedDate==''){
+				alert("预计成交日期不可为空！");
+				return;
+			}
+			if(customerName==''){
+				alert("客户名称不可为空！");
+				return;
+			}
+			if(vue.transaction.stage==''){
+				alert("交易阶段不可为空！");
+				return;
+			}
+			//为vue对象赋值，保存交易
+			vue.transaction.customerId=customerName;
+			vue.transaction.activityId=$("#create-activitySource").attr("activityId");
+			vue.transaction.contactsId=$("#create-contactsName").attr("contactsId");
+			vue.alterTran();
+		});
+	})
+</script>
+</head>
+<body>
+<div id="content">
+	<!-- 查找市场活动 -->	
+	<div class="modal fade" id="findMarketActivity" role="dialog">
+		<div class="modal-dialog" role="document" style="width: 80%;">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal">
+						<span aria-hidden="true">×</span>
+					</button>
+					<h4 class="modal-title">查找市场活动</h4>
+				</div>
+				<div class="modal-body">
+					<div class="btn-group" style="position: relative; top: 18%; left: 8px;">
+						<form class="form-inline" role="form">
+						  <div class="form-group has-feedback">
+						    <input id="searchActivityNameInput" type="text" class="form-control" style="width: 300px;" placeholder="请输入市场活动名称，支持模糊查询">
+						    <span class="glyphicon glyphicon-search form-control-feedback"></span>
+						  </div>
+						</form>
+					</div>
+					<table id="activityTable3" class="table table-hover" style="width: 900px; position: relative;top: 10px;">
+						<thead>
+							<tr style="color: #B3B3B3;">
+								<td></td>
+								<td>名称</td>
+								<td>开始日期</td>
+								<td>结束日期</td>
+								<td>所有者</td>
+							</tr>
+						</thead>
+						<tbody id="activityTbody">
+							<tr v-for="activity in activityList">
+								<td><input type="radio" name="activity" :id="activity.id" :activityName="activity.name"/></td>
+								<td>{{activity.name}}</td>
+								<td>{{activity.startDate}}</td>
+								<td>{{activity.endDate}}</td>
+								<td>{{activity.owner}}</td>
+							</tr>
+<!--							<tr>-->
+<!--								<td><input type="radio" name="activity"/></td>-->
+<!--								<td>发传单</td>-->
+<!--								<td>2020-10-10</td>-->
+<!--								<td>2020-10-20</td>-->
+<!--								<td>zhangsan</td>-->
+<!--							</tr>-->
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- 查找联系人 -->	
+	<div class="modal fade" id="findContacts" role="dialog">
+		<div class="modal-dialog" role="document" style="width: 80%;">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal">
+						<span aria-hidden="true">×</span>
+					</button>
+					<h4 class="modal-title">查找联系人</h4>
+				</div>
+				<div class="modal-body">
+					<div class="btn-group" style="position: relative; top: 18%; left: 8px;">
+						<form class="form-inline" role="form">
+						  <div class="form-group has-feedback">
+						    <input id="searchContactsNameInput" type="text" class="form-control" style="width: 300px;" placeholder="请输入联系人名称，支持模糊查询">
+						    <span class="glyphicon glyphicon-search form-control-feedback"></span>
+						  </div>
+						</form>
+					</div>
+					<table id="contactsTable" class="table table-hover" style="width: 900px; position: relative;top: 10px;">
+						<thead>
+							<tr style="color: #B3B3B3;">
+								<td></td>
+								<td>名称</td>
+								<td>邮箱</td>
+								<td>手机</td>
+							</tr>
+						</thead>
+						<tbody id="contactsTbody">
+							<tr v-for="contacts in contactsList">
+								<td><input type="radio" name="activity" :id="contacts.id" :contactsName="contacts.fullname"/></td>
+								<td>{{contacts.fullname}}</td>
+								<td>{{contacts.email}}</td>
+								<td>{{contacts.mphone}}</td>
+							</tr>
+<!--							<tr>-->
+<!--								<td><input type="radio" name="activity"/></td>-->
+<!--								<td>李四</td>-->
+<!--								<td>lisi@bjpowernode.com</td>-->
+<!--								<td>12345678901</td>-->
+<!--							</tr>-->
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+	</div>
+	
+	
+	<div style="position:  relative; left: 30px;">
+		<h3>修改交易</h3>
+	  	<div style="position: relative; top: -40px; left: 70%;">
+			<button id="saveTranBtn" type="button" class="btn btn-primary">保存</button>
+			<button type="button" class="btn btn-default">取消</button>
+		</div>
+		<hr style="position: relative; top: -40px;">
+	</div>
+	<form class="form-horizontal" role="form" style="position: relative; top: -30px;">
+		<input id="transactionId" type="hidden" th:value="${id}">
+		<div class="form-group">
+			<label for="create-owner" class="col-sm-2 control-label">所有者<span style="font-size: 15px; color: red;">*</span></label>
+			<div class="col-sm-10" style="width: 300px;">
+				<select class="form-control" id="create-owner" v-model="transaction.owner">
+				  <option th:each="user : ${userList}" th:value="${user.id}" th:text="${user.name}">zhangsan</option>
+<!--				  <option>lisi</option>-->
+<!--				  <option>wangwu</option>-->
+				</select>
+			</div>
+			<label for="create-money" class="col-sm-2 control-label">金额</label>
+			<div class="col-sm-10" style="width: 300px;">
+				<input type="text" class="form-control" id="create-money" v-model="transaction.money">
+			</div>
+		</div>
+		
+		<div class="form-group">
+			<label for="create-name" class="col-sm-2 control-label">名称<span style="font-size: 15px; color: red;">*</span></label>
+			<div class="col-sm-10" style="width: 300px;">
+				<input type="text" class="form-control" id="create-name" v-model="transaction.name">
+			</div>
+			<label for="create-expectedDate" class="col-sm-2 control-label">预计成交日期<span style="font-size: 15px; color: red;">*</span></label>
+			<div class="col-sm-10" style="width: 300px;">
+				<input type="text" class="form-control editDate" id="create-expectedDate" v-model="transaction.expectedDate" readonly>
+			</div>
+		</div>
+		
+		<div class="form-group">
+			<label for="create-customerName" class="col-sm-2 control-label">客户名称<span style="font-size: 15px; color: red;">*</span></label>
+			<div class="col-sm-10" style="width: 300px;">
+				<input type="text" class="form-control" id="create-customerName" placeholder="支持自动补全，输入客户不存在则新建">
+			</div>
+			<label for="create-stage" class="col-sm-2 control-label">阶段<span style="font-size: 15px; color: red;">*</span></label>
+			<div class="col-sm-10" style="width: 300px;">
+			  <select class="form-control" id="create-stage" v-model="transaction.stage">
+			  	<option></option>
+			  	<option th:each="stage : ${stageList}" th:value="${stage.id}" th:text="${stage.value}">资质审查</option>
+<!--			  	<option>需求分析</option>-->
+<!--			  	<option>价值建议</option>-->
+<!--			  	<option>确定决策者</option>-->
+<!--			  	<option>提案/报价</option>-->
+<!--			  	<option>谈判/复审</option>-->
+<!--			  	<option>成交</option>-->
+<!--			  	<option>丢失的线索</option>-->
+<!--			  	<option>因竞争丢失关闭</option>-->
+			  </select>
+			</div>
+		</div>
+		
+		<div class="form-group">
+			<label for="create-type" class="col-sm-2 control-label">类型</label>
+			<div class="col-sm-10" style="width: 300px;">
+				<select class="form-control" id="create-type" v-model="transaction.type">
+				  <option></option>
+				  <option th:each="type : ${tranTypeList}" th:value="${type.id}" th:text="${type.value}">已有业务</option>
+<!--				  <option>新业务</option>-->
+				</select>
+			</div>
+			<label for="create-possibility" class="col-sm-2 control-label">可能性</label>
+			<div class="col-sm-10" style="width: 300px;">
+				<input type="text" class="form-control" id="create-possibility" v-model="possible" readonly>
+			</div>
+		</div>
+		
+		<div class="form-group">
+			<label for="create-source" class="col-sm-2 control-label">来源</label>
+			<div class="col-sm-10" style="width: 300px;">
+				<select class="form-control" id="create-source" v-model="transaction.source">
+				  <option></option>
+				  <option th:each="source : ${sourceList}" th:value="${source.id}" th:text="${source.value}">广告</option>
+<!--				  <option>推销电话</option>-->
+<!--				  <option>员工介绍</option>-->
+<!--				  <option>外部介绍</option>-->
+<!--				  <option>在线商场</option>-->
+<!--				  <option>合作伙伴</option>-->
+<!--				  <option>公开媒介</option>-->
+<!--				  <option>销售邮件</option>-->
+<!--				  <option>合作伙伴研讨会</option>-->
+<!--				  <option>内部研讨会</option>-->
+<!--				  <option>交易会</option>-->
+<!--				  <option>web下载</option>-->
+<!--				  <option>web调研</option>-->
+<!--				  <option>聊天</option>-->
+				</select>
+			</div>
+			<label for="create-activitySource" class="col-sm-2 control-label">市场活动源&nbsp;&nbsp;<a id="searchActivityA" href="javascript:void(0);"><span class="glyphicon glyphicon-search"></span></a></label>
+			<div class="col-sm-10" style="width: 300px;">
+				<input type="text" class="form-control" id="create-activitySource" v-model="activityName" readonly>
+			</div>
+		</div>
+		
+		<div class="form-group">
+			<label for="create-contactsName" class="col-sm-2 control-label">联系人名称&nbsp;&nbsp;<a id="searchContactsA" href="javascript:void(0);"><span class="glyphicon glyphicon-search"></span></a></label>
+			<div class="col-sm-10" style="width: 300px;">
+				<input type="text" class="form-control" id="create-contactsName" v-model="contactsName" readonly>
+			</div>
+		</div>
+		
+		<div class="form-group">
+			<label for="create-description" class="col-sm-2 control-label">描述</label>
+			<div class="col-sm-10" style="width: 70%;">
+				<textarea class="form-control" rows="3" id="create-description" v-model="transaction.description"></textarea>
+			</div>
+		</div>
+		
+		<div class="form-group">
+			<label for="create-contactSummary" class="col-sm-2 control-label">联系纪要</label>
+			<div class="col-sm-10" style="width: 70%;">
+				<textarea class="form-control" rows="3" id="create-contactSummary" v-model="transaction.contactSummary"></textarea>
+			</div>
+		</div>
+		
+		<div class="form-group">
+			<label for="create-nextContactDate" class="col-sm-2 control-label">下次联系时间</label>
+			<div class="col-sm-10" style="width: 300px;">
+				<input type="text" class="form-control editDate" id="create-nextContactDate" v-model="transaction.nextContactDate" readonly>
+			</div>
+		</div>
+		
+	</form>
+</div>
+</body>
+</html>
